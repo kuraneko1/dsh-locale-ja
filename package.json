@@ -24,7 +24,8 @@
     "locale/namespaces/ja/*.json",
     "README.md",
     "LICENSE",
-    "NOTICE"
+    "NOTICE",
+    "cordis.patch.yml"
   ],
   "scripts": {
     "test": "node --test test/*.test.mjs"
