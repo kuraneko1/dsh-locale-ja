@@ -55,14 +55,13 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/kuraneko1/dsh-mobile-maxxing.git",
-    "directory": "packages/dsh-locale-ja"
+    "url": "git+https://github.com/kuraneko1/dsh-locale-ja.git"
   },
-  "homepage": "https://github.com/kuraneko1/dsh-mobile-maxxing/tree/main/packages/dsh-locale-ja#readme",
+  "homepage": "https://github.com/kuraneko1/dsh-locale-ja#readme",
   "bugs": {
-    "url": "https://github.com/kuraneko1/dsh-mobile-maxxing/issues"
+    "url": "https://github.com/kuraneko1/dsh-locale-ja/issues"
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh-client-locale": "0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-locale": "0.2.1-rc.2 || 0.2.1-rc.3"
   }
 }
