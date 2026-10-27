@@ -1,191 +1,81 @@
-# dsh-locale-ja
+# dsh-locale-ja 技術詳細
 
-Separate, optional Japanese locale package for DSH. It implements the final
-ownership and packaging migration of
-[#80](https://github.com/kuraneko1/dsh-mobile-maxxing/issues/80).
+このドキュメントは dsh-locale-ja パッケージの技術的詳細を説明します。一般ユーザーは README を参照してください。
 
-**This package is the only owner of `ja`.** The mobile package no longer
-registers a language or injects a locale pack; its `COPY.ja` is only its own
-UI copy. This package is not installed or enabled by the mobile tarball, is
-not added to a profile automatically, and never writes the shared display
-language: the phone picker only projects the catalog for this device.
+## パッケージ内容
 
-**The `ja` catalog is complete (2026-10-26).** All **64 namespaces / 2906
-keys** have a reviewed Japanese value, and `locale/translation-status.json`
-reports `complete` with zero English fallback. The migrated seed of **83
-values** is unchanged, and the other **2823 keys were reviewed and merged in
-94 batches**. The package is still `private` and optional: it is not
-published, the local tarball is the only install path, and a production
-profile install and a device run remain unverified. The loader contract is
-verified in isolation; GUI evidence is tracked under #70, separately from
-production installs (see [Status and limits](#status-and-limits)).
+- DSH 0.2.1-rc.2 の英語スナップショット: 64 名前空間 / 2906 キー（変更不可）
+- 日本語訳: 83 値はモバイルパックから移行、残り 2823 値は 94 バッチでレビュー済み
+- 生成ファイル: package.json, index.js, client.js, locale/batches.json, locale/translation-status.json
+- ビルドツール: tools/build-client.mjs, tools/merge-batches.mjs
 
-## What the package contains
+## 所有権と移行 (#80)
 
-- the stage-1 English snapshot: **64 namespaces / 2906 keys** from DSH
-  `0.2.1-rc.2`, unchanged;
-- **83 Japanese values** migrated byte-for-byte from the removed mobile pack
-  (`common` 41, `settings` 41, `settings.locale` 1). They are pinned by
-  `test/fixtures/seed-ja-83.json` and its SHA-256, so a later edit cannot
-  silently change a migrated value;
-- **2823 further reviewed Japanese values** for the remaining keys, merged
-  from 94 batches after independent review. Together with the seed they cover
-  every key, so the generated `client.js` contains no English fallback;
-- a generated package manifest, host entry and browser client;
-- a reviewable batch manifest with **97 batches** of 40-50 keys (small
-  namespaces and final remainders may be shorter). 94 of them (2823 keys)
-  were reviewed and merged; the 3 batches whose keys are the migrated seed
-  (`common-01`, `settings-01`, `settings.locale-01`) were already satisfied;
-- `tools/build-client.mjs` and `tools/merge-batches.mjs`.
+このパッケージは日本語（ja）の唯一の所有者です。dsh-mobile-maxxing はもはや言語を登録せず、COPY.ja は自身の UI 文案のみ。
 
-## Migration from the mobile pack (#80)
+- このパッケージ無しでは en/zh のみ
+- 両方入れても競合しない（モバイル側は addLanguage を呼ばない）
+- デスクトップは無効（no-op）
 
-Before this migration, `dsh-mobile-maxxing` registered three `ja`
-namespaces itself and injected them as `__RDSH_PWA_LOCALES__`. That code is
-gone: there is no `addLanguage`, no `register(..., "ja", ...)`, no
-`LOCALE_PACKS` and no injected locale payload in the mobile package.
-Consequences:
+## カタログの利用方法
 
-- a phone without this package offers only the host's registered locales
-  (`en`/`zh`); a stored `ja` choice is ignored instead of being guessed;
-- installing this package is the only way to add `ja`. It registers the
-  language and all 64 namespaces through the public locale API, and disposable
-  effects restore the catalog on unload;
-- having both packages installed is safe now: the mobile half never calls
-  `addLanguage`, so there is no second registration, and it does not own or
-  dispose this package's dictionaries;
-- the desktop stays a hard no-op: neither package sets the shared language or
-  changes a desktop catalog.
+モバイルプラグインはカタログを読むだけで、所有しない：
 
-## Consuming the catalog from the mobile plugin (#80)
+- レビュー済みラベルを使用（推測ではない）
+- 遅れて有効化されても追随する（locale/change + subscribe）
+- ホストのサイレント切替は既知の制限（resolveActive() を読み取り専用で使用）
+- ボックス化された revision は投影のショートカット（Object(125)）
 
-The mobile plugin reads this catalog but never owns it. Its tests pin these
-behaviors and the known limit they cannot cover:
+## インストール
 
-- **Reviewed labels, not guessed strings.** The phone's default hide list and
-  the dock's Split control match the committed `ja` renderings (`分割` and
-  the hide-list labels), and the idle subagent total is noun-first
-  (`サブエージェント 3 件`) while the running form is count-first. Tests read
-  the committed `ja` namespaces instead of spelling those labels out, so a
-  dictionary edit that breaks a probe fails there; a desktop stays a no-op.
-- **Late owner, still followed.** A profile may activate this package after
-  the mobile plugin attached. In addition to `locale/change`, the picker
-  follows the public `localeService.subscribe()` store republishes, so
-  `addLanguage`/`removeLanguage` reach it. The device choice stays a
-  separate intent (a withdrawn language unprojects to System and re-applies
-  when re-added), and dispose restores the latest Host view instead of
-  resurrecting a withdrawn `ja`.
-- **Silent Host switches are a known limit.** A Host switch to the language
-  this device already projects emits no event. To restore it, the plugin
-  reads DSH `0.2.1-rc.2`'s `resolveActive()` read-only while projecting, on
-  System/reset and on dispose; that method is runtime-callable but private in
-  its type declarations. If it is absent, throws or returns an unregistered
-  id, the plugin falls back to the last published baseline and a silent switch
-  is not detected. It never calls `write`/`setLocale`, and no future SDK is
-  assumed to keep that internal reader available.
-- **Boxed revision is a projection shortcut.** The view keeps the Host number
-  (125) but passes `Object(125)` so identity-keyed text/slot caches refresh;
-  `<=`, `+ 1` and JSON still see the number, and System/dispose restore the
-  primitive snapshot. It adapts the SDK's public `number` type locally: rc.2
-  consumers are verified, but `typeof number`/`Number.isInteger` assumptions
-  elsewhere break, with no general guarantee. No Host writer calls, fake
-  `locale/change` or numeric bump (`SHORTCUT(#80)`).
-
-## Install (optional, local tarball)
-
-This package is not part of the mobile tarball and is not published yet. The
-catalog is complete, so `scripts/pack-all.mjs` will build the locale tarball;
-install it separately from that local file:
+このパッケージはモバイル tarball に含まれず、自動では有効になりません。
 
 ```sh
-node scripts/pack-all.mjs            # dist/dsh-locale-ja-<version>.tgz only when complete
-dsh plugin --profile web add ./dist/dsh-locale-ja-0.1.0.tgz
-# restart DSH to load the client half
+dsh plugin --profile web add kuraneko1/dsh-locale-ja
 ```
 
-The gate stays in place as a safeguard: `scripts/pack-all.mjs` refuses to
-create the locale tarball whenever `locale/translation-status.json` is not
-`complete` (zero fallback with full 64/2906 coverage). It prints `REFUSED`
-with the current counts and produces no locale tarball, so an English
-fallback pack can never be released as Japanese. Use `node
-scripts/pack-all.mjs --require-locale` to make that refusal fail the command.
-There are still no release-download URLs for this package; the local tarball
-path above is preparation, not a verified production install.
+DSH を再起動して読み込み。
 
-## Layout
+## ディレクトリ構成
 
 ```
-package.json                 generated from locale/package-meta.json
-index.js                     generated host half (intentionally empty)
-client.js                    generated browser half (loader registration; one addLanguage, 64 registers)
+package.json                 locale/package-meta.json から生成
+index.js                     生成されたホスト半分（意図的に空）
+client.js                    生成されたブラウザ半分（ローダー登録）
 locale/
-  upstream.json              stage-1 ownership, sources, hashes, key counts
-  package-meta.json          source data for the generated manifest
-  batches.json               generated batch manifest
-  translation-status.json    generated complete/incomplete accounting
-  namespaces/en/*.json       stage-1 English snapshot (read-only here)
-  namespaces/ja/*.json       reviewed Japanese values only (64 files, one per namespace)
+  upstream.json              ステージ1: 所有権、ソース、ハッシュ、キー数
+  package-meta.json          生成マニフェストのソース
+  batches.json               生成されたバッチマニフェスト
+  translation-status.json    生成された完全/不完全の集計
+  namespaces/en/*.json       ステージ1英語スナップショット（読み取り専用）
+  namespaces/ja/*.json       レビュー済み日本語値（64ファイル）
 test/
-  extract-upstream.test.mjs  stage-1 extraction/reproducibility tests
-  stage2.test.mjs            generation, ownership, parity, complete/incomplete and merge tests
-  distribution.test.mjs      npm pack / install smoke, exports, no work/, dispose tests
-  client-loader.mjs          browser-loader harness (window.__ModuleLoader__ capture)
-  fixtures/seed-ja-83.json   immutable 83-value migration evidence and SHA-256
-LICENSE                      MIT license text plus the upstream copyright
-NOTICE                       upstream attribution notice
-work/                        local batch inputs/outputs, gitignored and not shipped
+  extract-upstream.test.mjs  ステージ1抽出・再現性テスト
+  stage2.test.mjs            生成、所有権、パリティ、完全性、マージテスト
+  distribution.test.mjs      npm pack / インストール smoke、exports、dispose テスト
+  client-loader.mjs          ブラウザローダーハーネス
+  fixtures/seed-ja-83.json   不変の83値移行証拠と SHA-256
+LICENSE                      MIT ライセンス + アップストリーム著作権
+NOTICE                       アップストリーム帰属通知
+work/                        ローカルバッチ入出力（gitignore、非出荷）
 ```
 
-The English files remain the key/value source of truth. The generator can
-fill a missing `ja` key with the English value as a development-only
-fallback, but that path is a test/development safeguard (it is what the
-incomplete fixture exercises), not the current state: every source key has a
-reviewed Japanese value, so the generated client has zero fallback.
-`locale/translation-status.json` reports `translated` and `fallback`
-counts per namespace and names the policy `development-only-english`.
+## 生成方法
 
-## Generating the package
-
-From the repository root:
+リポジトリルートから:
 
 ```sh
-node tools/build-client.mjs           # regenerate the five generated files
-node tools/build-client.mjs --check   # exit 1 on a stale generated file
+node tools/build-client.mjs           # 5つの生成ファイルを再生成
+node tools/build-client.mjs --check   # 生成ファイルが古い場合は exit 1
 ```
 
-Generated files are `package.json`, `index.js`, `client.js`,
-`locale/batches.json` and `locale/translation-status.json`. Do not edit them
-by hand. The generator reads the English snapshot and the Japanese source
-files, verifies the stage-1 dictionary hashes, checks key sets, duplicate JSON
-keys, blank values (allowed only where the English source is blank) and
-placeholder sets, then writes only those five paths. It never writes an
-English file.
+生成ファイルは手動で編集しない。ジェネレータは英語スナップショットと日本語ソースを読み、ハッシュ、キーセット、重複、空値、プレースホルダーを検証してから書き込む。
 
-`client.js` is a browser bundle, not an ES module. DSH concatenates each
-plugin's client file verbatim into a classic `<script>` batch, so the file only
-calls `window.__ModuleLoader__.load({ id: "dsh-locale-ja", factory })`; the
-loader queues that registration and materializes the factory once on first
-import. Raw `export` statements would fail to parse in that position and
-register nothing, so `./client` cannot be loaded with a bare Node `import`
-either; that export is for the browser loader only. `index.js` stays the ESM
-host entry. The factory returns:
+## バッチ翻訳ワークフロー
 
-- `language`: `{ id: "ja", label: "日本語", fallback: "en" }`;
-- `dictionaries`: all 64 complete `ja` dictionaries;
-- `inject`: `["locale"]`;
-- `apply(ctx)`: exactly one `ctx.locale.addLanguage(language)` and 64
-  `ctx.effect(() => ctx.locale.register(namespace, "ja", dictionary), label)`
-  calls, so every registration has an owner-owned disposer.
+locale/batches.json がすべての英語キーを1つのバッチに割り当てる。各バッチは id、名前空間、sourceHash、キーリストを持つ。
 
-## Batch translation workflow
-
-`locale/batches.json` assigns every English key to exactly one batch. Each
-batch has an `id`, one `namespace`, the namespace `sourceHash` from
-`upstream.json`, and its `keys`. Read the English values from
-`locale/namespaces/en/<fileName>`, where `fileName` comes from
-`locale/upstream.json`.
-
-A worker writes **only** `work/out/<batch-id>.json`:
+ワーカーは work/out/<batch-id>.json のみを書く:
 
 ```json
 {
@@ -200,14 +90,9 @@ A worker writes **only** `work/out/<batch-id>.json`:
 }
 ```
 
-`values` must cover exactly the batch's key list: no missing keys, no extra
-keys, strings with the same blankness as English (a blank value is allowed
-only where the English value is blank too), and the same `{placeholder}`
-names as English. Do not write English files, generated files, or another
-batch's output. `work/` is gitignored and is not in the package `files` list.
+values はバッチのキーリストと完全一致する必要がある（不足・余剰なし、空値は英語が空の場合のみ、プレースホルダー名も一致）。
 
-A guessed translation is not a reviewed translation. A reviewer records the
-exact batch hash they reviewed in `work/reviewed.json`:
+レビューアは work/reviewed.json にレビューしたバッチハッシュを記録:
 
 ```json
 {
@@ -218,130 +103,58 @@ exact batch hash they reviewed in `work/reviewed.json`:
 }
 ```
 
-Then, from the repository root:
+その後、リポジトリルートから:
 
 ```sh
-node tools/merge-batches.mjs --check   # validate reviewed batches, write nothing
-node tools/merge-batches.mjs           # atomically update locale/namespaces/ja
-node tools/build-client.mjs            # regenerate client and status
+node tools/merge-batches.mjs --check   # レビュー済みバッチを検証、書き込みなし
+node tools/merge-batches.mjs           # locale/namespaces/ja を原子更新
+node tools/build-client.mjs            # client と status を再生成
 node --test packages/dsh-locale-ja/test/stage2.test.mjs
 ```
 
-The merge accepts only batch ids present in `work/reviewed.json`. It rejects
-a stale reviewed hash, a stale output hash, a wrong namespace, missing/extra
-keys, blank values for non-blank English text, and placeholder changes. Every
-reviewed batch is validated before the first write; writes are temp-file
-renames under `locale/namespaces/ja/`, with the previous files restored if a
-rename fails. Unreviewed outputs are ignored with a warning. The English
-snapshot is never a write target. The merge does not run the generator
-automatically, so the generated client stays stale until `build-client.mjs`
-succeeds.
+マージは work/reviewed.json にあるバッチのみ受け付ける。古いハッシュ、名前空間違い、キー不足・余剰、非空英語の空値、プレースホルダー変更を拒否。すべてのレビュー済みバッチを検証してから最初の書き込みを行う。書き込みは一時ファイルのリネーム。英語スナップショットは書き込み対象外。
 
-Duplicate translated values are reported as warnings (for example two
-different English strings intentionally sharing one Japanese word). Duplicate
-JSON keys are hard errors.
+## ステータスと制限
 
-## Status and limits
+- パッキングゲート: translation-status.json が完全（64/2906、フォールバック0）の場合のみ tarball を作成
+- 現在のカバレッジ（2026-10-26）: complete、0 フォールバック
+- フォールバックはテスト/開発専用
+- このパッケージのみが ja を所有
+- オプションで自動インストールされない
+- ローダーは隔離済み、実機未検証
+- バッチサイズ: 40キー以上は40-50キー chunks、未満は1バッチ
 
-- **Packing gate (safeguard):** a locale tarball is produced only when
-  `locale/translation-status.json` reports the complete 64 namespaces / 2906
-  keys with zero English fallback. The current status already satisfies it;
-  the gate remains so a future incomplete edit cannot be packed as Japanese.
-- **Current coverage (2026-10-26):** `complete` — 64 of 64 namespaces and
-  2906 of 2906 keys have a reviewed Japanese value; 0 fallback, 0 partial. 83
-  are the migrated seed and 2823 were reviewed and merged in 94 batches.
-  `locale/translation-status.json` is the source of truth;
-  `node tools/build-client.mjs --check` fails if the generated files drift
-  from it.
-- **Fallback is test/development behavior:** the English fallback exists so
-  the generator and the incomplete fixture can exercise selection and
-  namespace registration. It is not used by the current catalog and must not
-  be described as translation.
-- **Sole ownership:** this package is the only `ja` language and namespace
-  owner. The mobile package no longer registers `ja`, so both may be enabled
-  together; only this package's effects add or remove the catalog entries. It
-  never sets the shared display language (the phone picker projects the catalog
-  for that device only).
-- **Optional and not auto-installed:** the mobile tarball does not contain this
-  package, does not depend on it and does not enable it. Nothing is installed
-  into a DSH profile until the operator runs the separate local-tarball command
-  above.
-- **Loader verified in isolation, not live:** the tests materialize the real
-  registration through a `window.__ModuleLoader__` harness, and a separate
-  check with the real ClientModuleSystem and the upstream locale bundle in an
-  isolated Chrome completed `modules.import` with 64 namespaces / 2906 keys /
-  65 disposers. GUI-level checks use isolated source replacement and their
-  evidence is tracked under #70 rather than here. Neither is a production
-  profile install or a device run: those remain unverified, and this document
-  claims no release, production or device success.
-- **Batch sizing:** namespaces with at least 40 keys use 40-50 key chunks except
-  the final remainder; namespaces below 40 keys stay in one short batch so a
-  worker always owns one namespace per output file.
-- `work/` is for local translation/review only. Keep it out of commits and
-  releases; the generated manifest ships only runtime files.
+## 意図的に未翻訳の値（許可リスト）
 
-## Intentionally untranslated values (allowlist)
+完全なカタログでも、いくつかは意図的に英語のまま:
 
-A complete catalog has a reviewed `ja` entry for every key; a few entries are
-deliberately identical to English. They are not missing translations:
+- command.token.{compact,export,feedback,goal,permission,plan}: トークンエイリアスが en/zh のみ
+- settings.account.onboardingArtworkLocale: アートワークが en/zh のみ
+- chat.message.stepProcess.sharedPrefix 等: 意図的に空白
+- schedule.catalog.time.locale / schedule.manager.time.locale: Intl ロケール ID
 
-- `command.token.{compact,export,feedback,goal,permission,plan}`: upstream's
-  `TOKEN_ALIASES` only has en/zh execution spellings, so the English token is
-  the correct value.
-- `settings.account.onboardingArtworkLocale`: the artwork assets only exist
-  for en/zh, so it stays `en`.
-- `chat.message.stepProcess.sharedPrefix`,
-  `pluginManager.sentenceSeparator`, `schedule.catalog.cron.part.join` and
-  `schedule.manager.cron.part.join`: intentionally blank, exactly like their
-  English source (a zero-width or other dummy character is forbidden).
-- `schedule.catalog.time.locale` / `schedule.manager.time.locale`: Intl
-  locale ids. They may become `ja`/`ja-JP` when complete but must never be
-  blank; the acceptance test distinguishes those values from `en`.
+## ステージ1: 英語スナップショットと抽出ツール
 
-Proper identifiers and execution tokens such as these are intentional keeps,
-not untranslated keys.
-
-## Stage 1: English snapshot and extractor
-
-The stage-1 tool records the upstream English dictionaries and where each
-namespace comes from. It does not translate anything and never creates,
-rewrites or deletes Japanese files.
+ステージ1ツールはアップストリーム英語辞書と各名前空間のソースを記録する。翻訳は行わない。
 
 ```sh
-# Default: $DSH_HOME/runtime or ~/.dsh/runtime
+# デフォルト: $DSH_HOME/runtime or ~/.dsh/runtime
 node tools/extract-upstream.mjs
 
-# Explicit runtime root, @deepseek-ai scope, or @deepseek-ai/dsh package
+# 明示的なルート
 node tools/extract-upstream.mjs --dsh-root ~/.dsh/runtime
-node tools/extract-upstream.mjs --dsh-root ~/.dsh/runtime/node_modules/@deepseek-ai
 
-# Compare the committed snapshot with the installed sources (exit 1 on drift)
+# コミット済みスナップショットと比較（差分があれば exit 1）
 node tools/extract-upstream.mjs --check
 ```
 
-`locale/upstream.json` contains `schemaVersion`, `snapshotLocale`, the
-`@deepseek-ai/dsh` version, totals, and per namespace `fileName`, `owners`,
-`sources` (`package`, `packageVersion`, `file`, `line`, `sha256`), a
-combined `sourceHash`, `locales`, `keyCounts` and `dictionaryHashes`. It has
-no timestamp, so extraction is deterministic and `--check` is a byte
-comparison. It contains no translations.
+locale/upstream.json は schemaVersion、snapshotLocale、dsh バージョン、合計、各名前空間の fileName、owners、sources、sourceHash、locales、keyCounts、dictionaryHashes を含む。タイムスタンプなし（決定的）。
 
-The parser is an already-installed JavaScript parser: the acorn bundled with
-Node first, then a project-local `acorn`, then `/usr/share/nodejs/acorn`. No
-dependency is added and nothing is installed. It resolves `register()` calls
-through local constants, templates, concatenation, `join`, `trim`,
-`Object.freeze`, spreads and literal three-argument locale tables, and fails
-with `file:line` rather than guessing when a registration cannot be resolved
-statically. Imported/re-exported dictionaries, computed keys, runtime values
-and data-driven tables outside the supported literal shape remain unsupported.
+パーサーは acorn を使用（Node 同梱、プロジェクトローカル、/usr/share/nodejs/acorn の順）。依存追加なし。
 
-When a new DSH rc is installed: run the extractor, review namespace/key/text
-diffs, update the Japanese source files only through reviewed batches, run
-`build-client.mjs`, and run both test files plus `--check`. The 64/2906 gate
-is specific to `0.2.1-rc.2`; tests skip the installed-runtime reproducibility
-assertions when the installed version differs, while `--check` still fails.
+新しい DSH rc がインストールされたら: 抽出 → 差分レビュー → バッチで日本語更新 → build-client.mjs → テスト実行。
 
-## Tests
+## テスト
 
 ```sh
 node --test packages/dsh-locale-ja/test/*.test.mjs
@@ -349,17 +162,6 @@ node --test packages/dsh-locale-ja/test/*.test.mjs
 pnpm test:locale
 ```
 
-`stage2.test.mjs` covers single ownership (including the removed mobile ja
-pack), 64 registrations with disposers, the immutable 83-value seed fixture and
-its hash, en/ja parity and status counts for both the explicit incomplete
-fixture and a complete 2906-key catalog with zero fallback, intentional-blank
-acceptance and ordinary-blank rejection, intentional English/Intl keeps,
-placeholder preservation, duplicate-key/value checks, batch coverage/hashes,
-reviewed merge, stale hashes, all-or-nothing validation, generated `--check`
-drift, and that `work/` is gitignored and absent from the package files.
+stage2.test.mjs: 単一所有権、64登録、不変シード、en/ja パリティ、完全/不完全、意図的空白、プレースホルダー保持、重複チェック、バッチカバレッジ、レビューマージ、生成チェック、work/ の gitignore。
 
-`distribution.test.mjs` packs the real package with `npm pack` and checks the
-standalone install: both exports resolve, no `work/` directory ships or is
-created, the installed client is the single `ja` owner with side-effect-free
-dispose, and `scripts/pack-all.mjs` refuses an incomplete locale while
-accepting only the complete 64/2906 zero-fallback status.
+distribution.test.mjs: npm pack、exports、work/ 非出荷、dispose、パッキングゲート。
