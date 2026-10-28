@@ -5,11 +5,12 @@ DSH（DeepSeek Harness）の日本語化パッケージ。[dsh-mobile-maxxing](h
 ## なぜ必要か
 
 DSH のモバイル版はデフォルトで英語・中国語のみ。このパッケージを入れると日本語表示が追加されます。
+DSH 0.2.1-rc.3 の 65 名前空間・2915 キーに対応し、英語へのフォールバックはありません。
 
 ## インストール
 
 ```sh
-dsh plugin --profile web add kuraneko1/dsh-locale-ja
+dsh plugin --profile web add github:kuraneko1/dsh-locale-ja
 ```
 
 DSH を再起動して反映。
