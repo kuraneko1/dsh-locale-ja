@@ -9,6 +9,10 @@ const json = async (file) => JSON.parse(await readFile(new URL(file, root), 'utf
 test('current catalog has complete translations and the client registers them', async () => {
   const upstream = await json('locale/upstream.json');
   const status = await json('locale/translation-status.json');
+  const metadata = await json('locale/package-meta.json');
+  const manifest = await json('package.json');
+  assert.equal(metadata.clientLocalePeer, '0.2.1-rc.2 || 0.2.1-rc.3');
+  assert.equal(manifest.peerDependencies['@deepseek-ai/dsh-client-locale'], metadata.clientLocalePeer);
   assert.equal(upstream.dsh.version, '0.2.1-rc.3');
   assert.deepEqual([status.totals.namespaces, status.totals.keys, status.totals.translated, status.totals.fallback], [65, 2915, 2915, 0]);
   const client = loadClientModule(await readFile(new URL('client.js', root), 'utf8'));
